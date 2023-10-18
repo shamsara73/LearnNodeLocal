@@ -1,6 +1,9 @@
 const express = require('express');
 const Sequelize = require('sequelize');
 const DataTypes = Sequelize.DataTypes;
+const expressListEndpoints = require('express-list-endpoints');
+const swaggerUi = require('swagger-ui-express');
+const swaggerJsdoc = require('swagger-jsdoc');
 
 const app = express();
 app.use(express.json());
@@ -135,7 +138,7 @@ res.forEach((resTable) => {
       const Model = models[tableName];
       const route = express.Router();
 
-      
+    
     // Create a new record
     route.post('/', async (req, res) => {
         try {
@@ -146,7 +149,6 @@ res.forEach((resTable) => {
         }
     });
 
-    // Get all records
     route.get('/', async (req, res) => {
         try {
         const records = await Model.findAll({ include: { all: true }});
@@ -210,6 +212,15 @@ res.forEach((resTable) => {
 
       app.use(`/${tableName}`, route);
     }
+
+    const routes = expressListEndpoints(app);
+    // console.log("Registered routes:");
+    // console.log(routes);
+
+    const swaggerSpec = require('./swagger');
+
+    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec(routes,models)));
+    
 
     const port = process.env.PORT || 3000;
     app.listen(port, () => {
