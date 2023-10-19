@@ -8,11 +8,11 @@ const swaggerJsdoc = require('swagger-jsdoc');
 const app = express();
 app.use(express.json());
 
-const database = 'RMS';
-const username = 'userMP';
-const password = 'Bii123456';
-const host = '10.235.84.47';
-const dbport = 1661;
+const database = 'Your Database';
+const username = 'Your Username';
+const password = 'Your Password';
+const host = 'Your Database Address (IP/Host Address)';
+const dbport = 1133;
 
 const sequelize = new Sequelize(database, username, password, {
   host: host,
