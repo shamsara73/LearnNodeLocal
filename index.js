@@ -112,6 +112,7 @@ res.forEach((resTable) => {
             // Check if the column name is 'id' and mark it as the primary key
             if (columnName.toLowerCase() === 'id') {
                 attributes[columnName].primaryKey = true;
+                attributes[columnName].autoIncrement = true;
             }
           } else {
             // Handle unsupported data types or add more mappings as needed
@@ -206,7 +207,7 @@ res.forEach((resTable) => {
             res.status(404).json({ error: 'Record not found' });
         }
         } catch (error) {
-        res.status(500).json({ error: 'Internal Server Error' });
+          res.status(500).json({ error: 'Internal Server Error' });
         }
     });
 

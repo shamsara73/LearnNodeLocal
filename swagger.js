@@ -1,4 +1,38 @@
 const swaggerJsdoc = require('swagger-jsdoc');
+const Sequelize = require('sequelize');
+
+// Generate example properties from a Sequelize model
+function generateExampleFromModel(model, excludeId = false) {
+  const example = {};
+  for (const attribute in model.getAttributes()) {
+    if (excludeId && attribute.toLowerCase() === 'id') {
+      continue; // Exclude the 'id' property if specified
+    }
+    // Map Sequelize data types to example values (customize as needed)
+    switch (model.rawAttributes[attribute].type.key) {
+      case 'STRING':
+        example[attribute] = 'Sample ' + attribute;
+        break;
+      case 'TEXT':
+        example[attribute] = 'Sample ' + attribute + ' description';
+        break;
+      case 'FLOAT':
+        example[attribute] = 10.99;
+        break;
+      case 'INTEGER':
+      case 'BIGINT':
+        example[attribute] = 10;
+        break;
+      case 'BOOLEAN':
+        example[attribute] = true;
+        break;
+      // Add more data type mappings as required
+      default:
+        example[attribute] = null;
+    }
+  }
+  return example;
+}
 
 function generateSpecs(routes,models){
     
@@ -28,14 +62,100 @@ function generateSpecs(routes,models){
             summary = _path.includes("/{id}")? 'Get By ID':'Get All';
             parameters[0] = _path.includes("/{id}") && {"name":"id","description":"data's ID","in":"path","required":true,"type":"integer"};
   
+            if(_path.includes("/{id}")){
+                swaggerDefinition.paths[_path][method.toLowerCase()] = {
+                    summary,
+                    tags :[tags],
+                    produces: ["application/json"],
+                    parameters : parameters,
+                    responses: {
+                      200: {
+                        description: 'Successful response',
+                      },
+                    },
+                  };
+            }else{
+                swaggerDefinition.paths[_path][method.toLowerCase()] = {
+                    summary,
+                    tags :[tags],
+                    produces: ["application/json"],
+                    responses: {
+                      200: {
+                        description: 'Successful response',
+                      },
+                    },
+                  };
+            }
+            
+          }else if(method === "POST"){
+            summary = 'Create entity';
+            
             swaggerDefinition.paths[_path][method.toLowerCase()] = {
               summary,
               tags :[tags],
               produces: ["application/json"],
-              parameters :_path.includes("/{id}") && parameters,
+              requestBody : {
+                required:true,
+                content: {
+                  'application/json': {
+                    example: generateExampleFromModel(models[tags],true),
+                  },
+                },
+              },
+              responses: {
+                201: {
+                  description: 'Created',
+                  content: {
+                    'application/json': {
+                      example: generateExampleFromModel(models[tags]),
+                      // Include any other response properties as needed
+                    },
+                  },
+                },
+              },
+            };
+          }else if(method === "PUT"){
+            summary = 'Update entity';
+            parameters[0] = _path.includes("/{id}") && {"name":"id","description":"data's ID","in":"path","required":true,"type":"integer"};
+            
+            swaggerDefinition.paths[_path][method.toLowerCase()] = {
+              summary,
+              tags :[tags],
+              produces: ["application/json"],
+              parameters : parameters,
+              requestBody : {
+                required:true,
+                content: {
+                  'application/json': {
+                    example: generateExampleFromModel(models[tags]),
+                  },
+                },
+              },
               responses: {
                 200: {
-                  description: 'Successful response',
+                  description: 'Updated',
+                  content: {
+                    'application/json': {
+                      example: generateExampleFromModel(models[tags]),
+                      // Include any other response properties as needed
+                    },
+                  },
+                },
+              },
+            };
+          }else if(method === "DELETE"){
+            summary = 'Delete entity';
+            parameters[0] = _path.includes("/{id}") && {"name":"id","description":"data's ID","in":"path","required":true,"type":"integer"};
+            
+            swaggerDefinition.paths[_path][method.toLowerCase()] = {
+              summary,
+              tags :[tags],
+              produces: ["application/json"],
+              parameters : parameters,
+              responses: {
+                204: {
+                  description: 'Deleted',
+                  
                 },
               },
             };
@@ -46,27 +166,35 @@ function generateSpecs(routes,models){
       });
       
       // Generate object definitions
-    //   let definitions = {};
-    //   for (const tableName in models) {
-    //     const Model = models[tableName];
-    //     definitions[tableName] = {
-    //         properties:{
-                
-    //         }
-    //     }
-    //   }
+      let definitions = {};
+      for (const tableName in models) {
+        const Model = models[tableName];
+        let attributes = Model.getAttributes();
+        let _attr = {};
+        for(const atr in attributes){
+          let _selAtr = attributes[atr];
+          // console.log(_selAtr.type.constructor.key.toLowerCase());
+          _attr[atr] = {"type" : _selAtr.type.constructor.key.toLowerCase()}
+        }
+        definitions[tableName] = {
+            properties:_attr
+        }
+      }
+      // console.log(JSON.stringify(definitions, null, 2));
 
-    //   swaggerDefinition.definitions = definitions;
+      swaggerDefinition.definitions = definitions;
+      swaggerDefinition.components = {"schemas":definitions};
       
 
       // Generate Swagger specs using swagger-jsdoc
       const options = {
         swaggerDefinition,
         apis: ['./index.js'],
+        explorer: true,
       };
       
       const swaggerSpec = swaggerJsdoc(options);
-    //   console.log(JSON.stringify(swaggerSpec, null, 2));
+      // console.log(JSON.stringify(swaggerSpec, null, 2));
 
     return swaggerSpec;
 } 
