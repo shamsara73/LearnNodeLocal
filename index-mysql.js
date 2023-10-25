@@ -1,170 +1,228 @@
 const express = require('express');
 const Sequelize = require('sequelize');
-const mysql2 = require('mysql2'); // Require the mysql2 package
 const DataTypes = Sequelize.DataTypes;
+const expressListEndpoints = require('express-list-endpoints');
+const swaggerUi = require('swagger-ui-express');
+const swaggerJsdoc = require('swagger-jsdoc');
 
 const app = express();
 app.use(express.json());
 
-const database = 'RMS';
-const username = 'userMP';
-const password = 'Bii123456';
-const host = 'localhost'; // Change to your MySQL server host
-const dbport = 3306; // Change to your MySQL server port
+const database = 'ecommerce';
+const username = 'root';
+const password = '';
+const host = 'localhost';
+const dbport = 3306;
+
 const sequelize = new Sequelize(database, username, password, {
   host: host,
   port: dbport,
-  dialect: 'mysql', // Set the dialect to MySQL
+  dialect: 'mysql',
   define: {
     freezeTableName: true,
   },
 });
+// Map SQL Server data types to Sequelize data types
+const sqlServerToSequelize = {
+    int: DataTypes.INTEGER,
+    bit: DataTypes.BOOLEAN,
+    bigint: DataTypes.BIGINT,
+    varchar: DataTypes.STRING,
+    nvarchar: DataTypes.STRING,
+    float: DataTypes.FLOAT,
+    decimal: DataTypes.FLOAT,
+    datetime: DataTypes.DATE,
+    char:DataTypes.CHAR,
+    text:DataTypes.TEXT,
+    // Add more data type mappings as needed
+  };
+  // Function to establish associations based on foreign keys
+async function createAssociations(models) {
+  const res = await sequelize.query(`SELECT 
+  TABLE_NAME AS TableWithForeignKey,
+  COLUMN_NAME AS ForeignKeyColumn,
+  REFERENCED_TABLE_NAME AS DependentOnTable,
+  REFERENCED_COLUMN_NAME AS ReferencedColumn,
+  'N:1' AS RelationshipType
+FROM
+  INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+WHERE
+  REFERENCED_TABLE_NAME IS NOT NULL
+ORDER BY TableWithForeignKey;
+`, { type: sequelize.QueryTypes.SELECT });
 
-// Map MySQL data types to Sequelize data types
-const mysqlToSequelize = {
-  int: DataTypes.INTEGER,
-  bigint: DataTypes.BIGINT,
-  varchar: DataTypes.STRING,
-  text: DataTypes.TEXT,
-  float: DataTypes.FLOAT,
-  datetime: DataTypes.DATE,
-  // Add more data type mappings as needed
-};
+res.forEach((resTable) => {
+  const Model = models[resTable.TableWithForeignKey];
+  const relatedModel = models[resTable.DependentOnTable];
+  const relatedColumnName = resTable.ForeignKeyColumn;
+  Model.belongsTo(relatedModel, {
+    foreignKey: relatedColumnName,
+    // as: resTable.ForeignKeyColumn+"_"+resTable.DependentOnTable, // You can use a more meaningful alias if needed
+    as: resTable.DependentOnTable
+  });
 
-sequelize.query('SHOW TABLES', { type: sequelize.QueryTypes.SELECT })
-  .then(async (tables) => {
-    const models = {};
+  relatedModel.hasMany(Model,{
+    foreignKey: relatedColumnName,
+    as: resTable.TableWithForeignKey
+  });
+})
 
-    for (const table of tables) {
-      const tableName = table[`Tables_in_${database}`];
-      const attributes = {};
-
-      // Fetch columns for the table
-      const columns = await sequelize.query(`DESCRIBE ${tableName}`, { type: sequelize.QueryTypes.SELECT });
-
-      columns.forEach((column) => {
-        const columnName = column.Field;
-        const dataType = column.Type;
-
-        // Map MySQL data type to Sequelize data type
-        const sequelizeType = mysqlToSequelize[dataType.split('(')[0].toLowerCase()];
-
-        if (sequelizeType) {
-          attributes[columnName] = {
-            type: sequelizeType,
-          };
-          // Check if the column name is 'id' and mark it as the primary key
-          if (columnName.toLowerCase() === 'id') {
-            attributes[columnName].primaryKey = true;
-          }
-        } else {
-          // Handle unsupported data types or add more mappings as needed
-          console.warn(`Unsupported data type for column '${columnName}' in table '${tableName}': ${dataType}`);
-        }
-      });
-
-      // Define the model with attributes
-      const model = sequelize.define(tableName, attributes, {
-        tableName: tableName,
-        freezeTableName: true,
-        timestamps: false,
-      });
-
-      // Automatically try to set up associations based on naming conventions
-      if (tableName.endsWith('s')) {
-        const relatedTableName = tableName.slice(0, -1);
-        if (tables.find((t) => t[`Tables_in_${database}`] === relatedTableName)) {
-          model.belongsTo(models[relatedTableName]);
-          models[relatedTableName].hasMany(model);
-        }
+  // for (const tableName in models) {
+  //   const Model = models[tableName];
+  //   for (const columnName in Model.rawAttributes) {
+  //     const column = Model.rawAttributes[columnName];
+  //     if (column.references) {
+  //       // Assuming the foreign key references another table named relatedTableName
+  //       const relatedTableName = column.references.model;
+  //       const relatedModel = models[relatedTableName];
+  //       if (relatedModel) {
+  //         Model.belongsTo(relatedModel, {
+  //           foreignKey: columnName,
+  //           as: relatedTableName, // You can use a more meaningful alias if needed
+  //         });
+  //       }
+  //     }
+  //   }
+  // }
+}
+  sequelize.query("SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema = '"+database+"';", { type: sequelize.QueryTypes.SELECT })
+    .then(async (tables) => {
+      const models = {};
+  
+      for (const table of tables) {
+        const tableName = table.TABLE_NAME;
+        const attributes = {};
+  
+        // Fetch columns for the table
+        const columns = await sequelize.query(`SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '${tableName}' and TABLE_SCHEMA = '${database}';`, { type: sequelize.QueryTypes.SELECT })
+          // .then((columns) => {
+          columns.forEach((column) => {
+            const columnName = column.COLUMN_NAME;
+            const dataType = column.DATA_TYPE;
+            
+            // Map SQL Server data type to Sequelize data type
+            const sequelizeType = sqlServerToSequelize[dataType.toLowerCase()];
+    
+            if (sequelizeType) {
+              attributes[columnName] = {
+                type: sequelizeType,
+              };
+              // Check if the column name is 'id' and mark it as the primary key
+              if (columnName.toLowerCase() === 'id') {
+                  attributes[columnName].primaryKey = true;
+                  attributes[columnName].autoIncrement = true;
+              }
+            } else {
+              // Handle unsupported data types or add more mappings as needed
+              console.warn(`Unsupported data type for column '${columnName}' in table '${tableName}': ${dataType}`);
+            }
+          });
+    
+          // Define the model with attributes
+          const model = sequelize.define(tableName, attributes, {
+            tableName: tableName,
+            freezeTableName: true,
+            timestamps:false,
+          });
+    
+    
+          models[tableName] = model;
+        // }
+  
+        
       }
-
-      models[tableName] = model;
-    }
-
-    sequelize.sync();
+      // Create associations between models
+      createAssociations(models);
+      sequelize.sync();
 
     // Define routes for CRUD operations
     for (const tableName in models) {
       const Model = models[tableName];
       const route = express.Router();
 
-      // Create a new record
-      route.post('/', async (req, res) => {
+    
+    // Create a new record
+    route.post('/', async (req, res) => {
         try {
-          const newRecord = await Model.create(req.body);
-          res.status(201).json(newRecord);
+        const newRecord = await Model.create(req.body);
+        res.status(201).json(newRecord);
         } catch (error) {
-          console.error(error);
-          res.status(400).json({ error: 'Bad Request' });
+        res.status(400).json({ error: 'Bad Request' });
         }
-      });
+    });
 
-      // Get all records
-      route.get('/', async (req, res) => {
+    route.get('/', async (req, res) => {
         try {
-          const records = await Model.findAll();
-          res.json(records);
+        const records = await Model.findAll({ include: { all: true }});
+        res.json(records);
         } catch (error) {
-          console.error(error);
-          res.status(500).json({ error: 'Internal Server Error All' });
+            console.error(error);
+        res.status(500).json({ error: 'Internal Server Error All' });
         }
-      });
+    });
 
-      // Get a specific record by ID
-      route.get('/:id', async (req, res) => {
+    // Get a specific record by ID
+    route.get('/:id', async (req, res) => {
         try {
-          const record = await Model.findByPk(req.params.id);
-          if (record) {
+        const record = await Model.findByPk(req.params.id,{ include: { all: true }});
+        if (record) {
             res.json(record);
-          } else {
+        } else {
             res.status(404).json({ error: 'Record not found' });
-          }
-        } catch (error) {
-          console.error(error);
-          res.status(500).json({ error: 'Internal Server Error By ID' });
         }
-      });
+        } catch (error) {
+            console.error(error);
 
-      // Update a specific record by ID
-      route.put('/:id', async (req, res) => {
+        res.status(500).json({ error: 'Internal Server Error By ID' });
+        }
+    });
+
+    // Update a specific record by ID
+    route.put('/:id', async (req, res) => {
         try {
-          const [updatedCount] = await Model.update(req.body, {
+        const [updatedCount] = await Model.update(req.body, {
             where: { id: req.params.id },
-          });
+        });
 
-          if (updatedCount > 0) {
-            const updatedRecord = await Model.findByPk(req.params.id);
+        if (updatedCount > 0) {
+            const updatedRecord = await Model.findByPk(req.params.id,{ include: { all: true }});
             res.json(updatedRecord);
-          } else {
+        } else {
             res.status(404).json({ error: 'Record not found' });
-          }
-        } catch (error) {
-          console.error(error);
-          res.status(500).json({ error: 'Internal Server Error' });
         }
-      });
+        } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error' });
+        }
+    });
 
-      // Delete a specific record by ID
-      route.delete('/:id', async (req, res) => {
+    // Delete a specific record by ID
+    route.delete('/:id', async (req, res) => {
         try {
-          const deletedCount = await Model.destroy({
+        const deletedCount = await Model.destroy({
             where: { id: req.params.id },
-          });
+        });
 
-          if (deletedCount > 0) {
+        if (deletedCount > 0) {
             res.status(204).send();
-          } else {
+        } else {
             res.status(404).json({ error: 'Record not found' });
-          }
+        }
         } catch (error) {
-          console.error(error);
           res.status(500).json({ error: 'Internal Server Error' });
         }
-      });
+    });
 
       app.use(`/${tableName}`, route);
     }
+
+    const routes = expressListEndpoints(app);
+    // console.log("Registered routes:");
+    // console.log(routes);
+
+    const swaggerSpec = require('./swagger');
+
+    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec(routes,models)));
+    
 
     const port = process.env.PORT || 3000;
     app.listen(port, () => {

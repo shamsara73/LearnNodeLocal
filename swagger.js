@@ -72,6 +72,12 @@ function generateSpecs(routes,models){
                       200: {
                         description: 'Successful response',
                       },
+                      404: {
+                        description: 'Record not found',
+                      },
+                      500: {
+                        description: 'Internal Server Error',
+                      },
                     },
                   };
             }else{
@@ -82,6 +88,9 @@ function generateSpecs(routes,models){
                     responses: {
                       200: {
                         description: 'Successful response',
+                      },
+                      500: {
+                        description: 'Internal Server Error',
                       },
                     },
                   };
@@ -112,6 +121,9 @@ function generateSpecs(routes,models){
                     },
                   },
                 },
+                500: {
+                  description: 'Internal Server Error',
+                },
               },
             };
           }else if(method === "PUT"){
@@ -141,6 +153,12 @@ function generateSpecs(routes,models){
                     },
                   },
                 },
+                404: {
+                  description: 'Record not found',
+                },
+                500: {
+                  description: 'Internal Server Error',
+                },
               },
             };
           }else if(method === "DELETE"){
@@ -156,6 +174,12 @@ function generateSpecs(routes,models){
                 204: {
                   description: 'Deleted',
                   
+                },
+                404: {
+                  description: 'Record not found',
+                },
+                500: {
+                  description: 'Internal Server Error',
                 },
               },
             };

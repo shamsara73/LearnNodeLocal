@@ -4,6 +4,7 @@
     "express-list-endpoints": "^6.0.0",
     "lodash": "^4.17.21",
     "mssql": "^10.0.1",
+    "mysql2": "^3.6.2",
     "sequelize": "^6.33.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.0",
