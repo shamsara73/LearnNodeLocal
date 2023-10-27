@@ -8,7 +8,6 @@ const swaggerJsdoc = require('swagger-jsdoc');
 const app = express();
 app.use(express.json());
 
-const database = 'elcxkrlh';
 // const username = 'elcxkrlh';
 // const password = 'GvaaJjftJQ82xgmRea97GoLuojUKEXDq';
 // const host = 'postgres://elcxkrlh:GvaaJjftJQ82xgmRea97GoLuojUKEXDq@john.db.elephantsql.com/elcxkrlh';
@@ -24,26 +23,28 @@ const database = 'elcxkrlh';
 // });
 
 // Define your ElephantSQL connection URL
-const databaseUrl = 'postgres://elcxkrlh:GvaaJjftJQ82xgmRea97GoLuojUKEXDq@john.db.elephantsql.com/elcxkrlh';
+const database = 'threads_db';
+
+const databaseUrl = 'postgres://postgres:password123@127.0.0.1/threads_db';
 
 // Create a Sequelize instance
 const sequelize = new Sequelize(databaseUrl, {
   dialect: 'postgres',
   protocol: 'postgres',
-  dialectOptions: {
-    ssl: {
-      require: true,
-      rejectUnauthorized: false, // Use this option if you encounter SSL connection issues (not recommended for production)
-    },
-  },
+  // dialectOptions: {
+  //   ssl: {
+  //     require: true,
+  //     rejectUnauthorized: false, // Use this option if you encounter SSL connection issues (not recommended for production)
+  //   },
+  // },
 });
 
 // Map SQL Server data types to Sequelize data types
 const sqlServerToSequelize = {
-    int: DataTypes.INTEGER,
+    integer: DataTypes.INTEGER,
     bit: DataTypes.BOOLEAN,
     bigint: DataTypes.BIGINT,
-    varchar: DataTypes.STRING,
+    'character varying': DataTypes.STRING,
     nvarchar: DataTypes.STRING,
     float: DataTypes.FLOAT,
     decimal: DataTypes.FLOAT,
@@ -59,7 +60,7 @@ async function createAssociations(models) {
         tc.table_name AS TableWithForeignKey,
         kcu.column_name AS ForeignKeyColumn,
         ccu.table_name AS DependentOnTable,
-        ccu.column_name AS referenced_column
+        ccu.column_name AS ReferencedColumn
     FROM
         information_schema.table_constraints AS tc
         JOIN information_schema.key_column_usage AS kcu
@@ -70,23 +71,23 @@ async function createAssociations(models) {
         tc.constraint_type = 'FOREIGN KEY'
 )
 SELECT
-    t1.table_name,
-    f1.foreign_key_column,
-    f1.referenced_table,
-    f1.referenced_column
+    f1.TableWithForeignKey,
+    f1.ForeignKeyColumn,
+    f1.DependentOnTable,
+    f1.ReferencedColumn
 FROM
     foreign_keys AS f1
     JOIN information_schema.tables AS t1
-        ON f1.table_name = t1.table_name
+        ON f1.TableWithForeignKey = t1.table_name
 WHERE
     t1.table_schema = 'public';
 
 `, { type: sequelize.QueryTypes.SELECT });
 
 res.forEach((resTable) => {
-  const Model = models[resTable.TableWithForeignKey];
-  const relatedModel = models[resTable.DependentOnTable];
-  const relatedColumnName = resTable.ForeignKeyColumn;
+  const Model = models[resTable.tablewithforeignkey];
+  const relatedModel = models[resTable.dependentontable];
+  const relatedColumnName = resTable.foreignkeycolumn;
   Model.belongsTo(relatedModel, {
     foreignKey: relatedColumnName,
     // as: resTable.ForeignKeyColumn+"_"+resTable.DependentOnTable, // You can use a more meaningful alias if needed
@@ -117,20 +118,20 @@ res.forEach((resTable) => {
   //   }
   // }
 }
-  sequelize.query("SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema = '"+database+"';", { type: sequelize.QueryTypes.SELECT })
+  sequelize.query("SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' and table_name != 'migrations' AND table_catalog = '"+database+"' and table_schema = 'public';", { type: sequelize.QueryTypes.SELECT })
     .then(async (tables) => {
       const models = {};
   
       for (const table of tables) {
-        const tableName = table.TABLE_NAME;
+        const tableName = table[0];
         const attributes = {};
   
         // Fetch columns for the table
         const columns = await sequelize.query(`SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '${tableName}';`, { type: sequelize.QueryTypes.SELECT })
           // .then((columns) => {
           columns.forEach((column) => {
-            const columnName = column.COLUMN_NAME;
-            const dataType = column.DATA_TYPE;
+            const columnName = column.column_name;
+            const dataType = column.data_type;
             
             // Map SQL Server data type to Sequelize data type
             const sequelizeType = sqlServerToSequelize[dataType.toLowerCase()];
@@ -159,10 +160,11 @@ res.forEach((resTable) => {
     
     
           models[tableName] = model;
-        // }
+        // })
   
         
       }
+      
       // Create associations between models
       createAssociations(models);
       sequelize.sync();
