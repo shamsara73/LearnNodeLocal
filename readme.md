@@ -6,7 +6,7 @@ Express JS Automatic REST API is an Express JS API that automatically generates 
 
 (V) Microsoft SQL Server  
 (V) MySQL  
-(-) PostgreSQL  
+(V) PostgreSQL  
 (-) Oracle  
 
 For now only Microsoft SQL Server supported and tested.
